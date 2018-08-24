@@ -8,10 +8,13 @@
 #include <Wire.h> 
 #include <TinyGPS++.h>
 #include <LiquidCrystal_I2C.h>
-#include <SFE_BMP180.h>
+#include <OneWire.h> 
+#include <DallasTemperature.h>
 LiquidCrystal_I2C lcd(0x27,20,4);
 TinyGPSPlus gps;
-SFE_BMP180 pressure;
+#define ONE_WIRE_BUS 9
+OneWire oneWire(ONE_WIRE_BUS); 
+DallasTemperature sensors(&oneWire);
 
 const char custom[][8] PROGMEM = {
      {0x01, 0x07, 0x0F, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F},      // char 1: bottom right triangle
@@ -38,7 +41,7 @@ int hour, minute, second, hour2, day, oday, omonth, oyear;
 boolean Date = false;
 byte hr, mn, se, ohr, omn, osec;
 char status;
-double T,P,p0,a,F;
+double T,P,p0,a,F,fOld;
 unsigned long currentMillis, tempMillis;
 const int DSTPin = 2;     // the number of the pushbutton pin
 int buttonState = 0;
@@ -49,7 +52,7 @@ int buttonState = 0;
 void setup() {
   tempMillis = millis();
   Serial3.begin(115200);
-  pressure.begin();
+  sensors.begin();
   randomSeed(analogRead(0));
   lcd.init();
   lcd.backlight();
@@ -73,9 +76,6 @@ void setup() {
   //printColon(6, 0);
   //printColon(13, 0); 
   pinMode(DSTPin, INPUT_PULLUP); 
-
-
-  
  }
  
 //*****************************************************************************************//
@@ -151,7 +151,7 @@ void loop() {
         if (day != oday || gps.date.month() != omonth || gps.date.year() != oyear){ 
 
           lcd.setCursor(0, 3); 
-          lcd.print("                    ");
+          lcd.print("           ");
           lcd.setCursor(0,3);
           lcd.print(gps.date.month());
           lcd.print(F("/"));
@@ -165,26 +165,19 @@ void loop() {
       }
     }
   }
-  status = pressure.startTemperature();
-  if (currentMillis - tempMillis >= 1100) {
-    tempMillis = millis();
-    if (status != 0){
-      // Wait for the measurement to complete:
-      delay(status);
-  
-      // Retrieve the completed temperature measurement:
-      // Note that the measurement is stored in the variable T.
-      // Function returns 1 if successful, 0 if failure.
-      status = pressure.getTemperature(T);
-      if (status != 0)
-      {
-        F = (9.0/5.0)*T+32.0;
-        String TempLength = String(F,1);
-        lcd.setCursor(18-TempLength.length(),3);
-        lcd.print(F-4,1);
-        lcd.print((char)223);
-        lcd.print("F");  
-      }
+  if (currentMillis - tempMillis >= 9999) {
+    sensors.requestTemperatures();
+    F = sensors.getTempFByIndex(0);
+    if (F != fOld){
+      tempMillis = millis();
+      String TempLength = String(F,1);
+      lcd.setCursor(11,3);
+      lcd.print("         ");
+      lcd.setCursor(18-TempLength.length(),3);
+      lcd.print(F,1);
+      lcd.print((char)223);
+      lcd.print("F");
+      fOld = F;  
     }
   }
 
